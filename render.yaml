@@ -6,6 +6,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+    plan: free
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -16,6 +17,6 @@ services:
 
 databases:
   - name: fadetap-db
-    plan: basic-256mb
+    plan: free
     databaseName: fadetap
     user: fadetap
