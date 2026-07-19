@@ -1,0 +1,21 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/vite*.log
+
+# Backend secrets, local state, and runtime files
+backend/.env
+backend/.venv/
+backend/__pycache__/
+backend/**/*.py[cod]
+backend/*.db
+backend/*.db-*
+backend/*.db.*
+backend/uploads/
+backend/*.log
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/

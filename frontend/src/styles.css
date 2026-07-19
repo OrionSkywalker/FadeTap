@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+}
+
+@layer base {
+  body {
+    @apply bg-stone-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50;
+  }
+}
+
+@layer utilities {
+  .dark .bg-white {
+    background-color: rgb(24 24 27) !important;
+  }
+
+  .dark .bg-stone-50 {
+    background-color: rgb(39 39 42) !important;
+  }
+
+  .dark .bg-stone-100 {
+    background-color: rgb(63 63 70) !important;
+  }
+
+  .dark .bg-emerald-50 {
+    background-color: rgb(6 78 59) !important;
+  }
+
+  .dark .bg-emerald-100 {
+    background-color: rgb(6 95 70) !important;
+  }
+
+  .dark .bg-amber-50 {
+    background-color: rgb(120 53 15) !important;
+  }
+
+  .dark .bg-red-50 {
+    background-color: rgb(127 29 29) !important;
+  }
+
+  .dark .border-zinc-200,
+  .dark .border-zinc-300 {
+    border-color: rgb(63 63 70) !important;
+  }
+
+  .dark .text-zinc-950,
+  .dark .text-zinc-900,
+  .dark .text-zinc-800 {
+    color: rgb(250 250 250) !important;
+  }
+
+  .dark .text-zinc-700,
+  .dark .text-zinc-600,
+  .dark .text-zinc-500 {
+    color: rgb(212 212 216) !important;
+  }
+
+  .dark .text-emerald-800,
+  .dark .text-emerald-700 {
+    color: rgb(110 231 183) !important;
+  }
+
+  .dark .text-amber-800,
+  .dark .text-red-700,
+  .dark .text-red-800 {
+    color: rgb(254 226 226) !important;
+  }
+
+  .dark .shadow-sm {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.45) !important;
+  }
+}
+
+/* Use the browser's native calendar icon; the input itself stays white in both themes. */
+.booking-date-input {
+  color-scheme: light;
+}
+
+.dark .booking-date-input {
+  background-color: #fff !important;
+  color: rgb(24 24 27) !important;
+}
