@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../api";
+import GoogleIcon from "../components/GoogleIcon";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -28,13 +29,14 @@ export default function LoginPage() {
 
   return (
     <section className="mx-auto max-w-md px-6 py-10">
-      <h1 className="text-3xl font-bold">Barber login</h1>
+      <h1 className="text-3xl font-bold">Service Provider Login</h1>
       <form onSubmit={submit} className="mt-6 grid gap-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
         <button
           type="button"
           onClick={() => { window.location.href = `${import.meta.env.VITE_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`}/api/auth/google/login`; }}
-          className="rounded-md border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-900 hover:bg-stone-50"
+          className="flex items-center justify-center gap-3 rounded-md border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-900 hover:bg-stone-50"
         >
+          <GoogleIcon />
           Continue with Google
         </button>
         <div className="flex items-center gap-3 text-xs text-zinc-500"><span className="h-px flex-1 bg-zinc-200" />Password sign-in (temporary)<span className="h-px flex-1 bg-zinc-200" /></div>

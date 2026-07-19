@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRequest } from "../api";
+import GoogleIcon from "../components/GoogleIcon";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -69,7 +70,7 @@ export default function RegisterPage() {
       {!googleEmail ? (
         <div className="grid gap-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-zinc-700">Use your Google account to create and manage this shop. FadeTap does not collect a password.</p>
-          <button type="button" onClick={() => { window.location.href = `${import.meta.env.VITE_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`}/api/auth/google/login?next=register`; }} className="rounded-md bg-zinc-950 px-4 py-3 text-sm font-semibold text-white">Continue with Google</button>
+          <button type="button" onClick={() => { window.location.href = `${import.meta.env.VITE_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`}/api/auth/google/login?next=register`; }} className="flex items-center justify-center gap-3 rounded-md bg-zinc-950 px-4 py-3 text-sm font-semibold text-white"><GoogleIcon />Continue with Google</button>
         </div>
       ) : <form onSubmit={submit} className="grid gap-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
         {[
