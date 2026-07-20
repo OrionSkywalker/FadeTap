@@ -78,7 +78,7 @@ export default function LandingPage() {
             Find a barber, book an appointment. It's that easy.
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-zinc-700">
-            FadeTap helps shops publish live availability, collect non-refundable booking payments, and keep calendars current.
+            FadeTap helps shops publish live availability, collect payments, and keep calendars current.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <button
