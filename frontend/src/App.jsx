@@ -6,7 +6,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isShopBookingPage = location.pathname.startsWith("/book/");
 
