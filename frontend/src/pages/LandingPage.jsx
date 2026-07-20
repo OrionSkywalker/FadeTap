@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../api";
+import InstallAppButton from "../components/InstallAppButton";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -87,6 +88,7 @@ export default function LandingPage() {
             >
               Refresh nearby shops
             </button>
+            <InstallAppButton />
           </div>
           {locationStatus && <p className="mt-3 text-sm text-zinc-600">{locationStatus}</p>}
         </div>
