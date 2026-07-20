@@ -7,6 +7,7 @@ export default function App() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isShopBookingPage = location.pathname.startsWith("/book/");
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function App() {
   async function logout() {
     await apiRequest("/api/auth/logout", { method: "POST" });
     setUser(null);
+    setIsMenuOpen(false);
     navigate("/");
   }
 
@@ -68,35 +70,42 @@ export default function App() {
   return (
     <div className="min-h-screen bg-stone-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
       <header className="border-b border-zinc-200 bg-white transition-colors dark:border-zinc-800 dark:bg-zinc-950">
-        <nav className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <Link to="/" className="text-lg font-semibold leading-none text-zinc-950 dark:text-zinc-50">
+        <nav className="relative mx-auto flex min-h-20 max-w-6xl items-center justify-between px-4 py-3 sm:min-h-24 sm:px-6">
+          <Link to="/" className="text-5xl font-semibold leading-none tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-6xl">
             FadeTap
           </Link>
           {!isShopBookingPage && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              <button type="button" onClick={bookNow} className="hover:text-zinc-950 dark:hover:text-white">Book now</button>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 sm:right-6">
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((open) => !open)}
+                aria-label="Toggle navigation menu"
+                aria-expanded={isMenuOpen}
+                className="rounded-md p-2 text-zinc-700 transition hover:bg-stone-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              {isMenuOpen && (
+                <div className="absolute right-0 top-full z-20 mt-2 grid min-w-48 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 text-sm font-medium text-zinc-700 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                  <button type="button" onClick={() => { setIsMenuOpen(false); bookNow(); }} className="px-4 py-3 text-left hover:bg-stone-100 dark:hover:bg-zinc-800">Book now</button>
               {user?.role === "platform_admin" ? (
-              <button type="button" onClick={logout} className="font-medium hover:text-zinc-950 dark:hover:text-white">Logout</button>
+                  <button type="button" onClick={logout} className="px-4 py-3 text-left hover:bg-stone-100 dark:hover:bg-zinc-800">Logout</button>
               ) : user?.role === "owner" ? (
               <>
-                <Link to="/dashboard" className="hover:text-zinc-950 dark:hover:text-white">
-                  Dashboard
-                </Link>
-                <button type="button" onClick={logout} className="font-medium hover:text-zinc-950 dark:hover:text-white">
-                  Logout
-                </button>
+                    <Link to="/dashboard" onClick={() => setIsMenuOpen(false)} className="px-4 py-3 hover:bg-stone-100 dark:hover:bg-zinc-800">Dashboard</Link>
+                    <button type="button" onClick={logout} className="px-4 py-3 text-left hover:bg-stone-100 dark:hover:bg-zinc-800">Logout</button>
               </>
             ) : user?.role === "barber" ? (
-              <><Link to="/barber/clients" className="hover:text-zinc-950 dark:hover:text-white">My clients</Link><button type="button" onClick={logout} className="font-medium hover:text-zinc-950 dark:hover:text-white">Logout</button></>
+                  <><Link to="/barber/clients" onClick={() => setIsMenuOpen(false)} className="px-4 py-3 hover:bg-stone-100 dark:hover:bg-zinc-800">My clients</Link><button type="button" onClick={logout} className="px-4 py-3 text-left hover:bg-stone-100 dark:hover:bg-zinc-800">Logout</button></>
             ) : (
               <>
-                <Link to="/register" className="hover:text-zinc-950 dark:hover:text-white">
-                  Open a Shop
-                </Link>
-                <Link to="/login" className="hover:text-zinc-950 dark:hover:text-white">
-                  Login
-                </Link>
+                    <Link to="/register" onClick={() => setIsMenuOpen(false)} className="px-4 py-3 hover:bg-stone-100 dark:hover:bg-zinc-800">Open a Shop</Link>
+                    <Link to="/login" onClick={() => setIsMenuOpen(false)} className="px-4 py-3 hover:bg-stone-100 dark:hover:bg-zinc-800">Login</Link>
               </>
+              )}
+                </div>
               )}
             </div>
           )}
