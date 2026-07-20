@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
+from secrets import choice as secure_choice
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
@@ -384,16 +385,15 @@ def build_available_slots(
         business_hour = date_override or hours_by_day.get(local_day.weekday())
         if business_hour is None or business_hour.is_closed:
             continue
-        if barber_id and is_barber_blocked(shop.id, barber_id, local_day.isoformat(), db):
-            continue
-
         opens_at = datetime.combine(local_day, parse_hhmm(business_hour.opens_at), tzinfo=tz)
         closes_at = datetime.combine(local_day, parse_hhmm(business_hour.closes_at), tzinfo=tz)
         slot_start = opens_at
         while slot_start + timedelta(minutes=service.duration_minutes) <= closes_at:
             if slot_start > now_local + timedelta(minutes=30):
                 candidate_starts.append(slot_start.astimezone(timezone.utc))
-            slot_start += timedelta(minutes=30)
+            # Quarter-hour starts accommodate services such as 45-minute cuts
+            # without forcing providers into half-hour-only gaps.
+            slot_start += timedelta(minutes=15)
             if len(candidate_starts) >= candidate_limit:
                 break
         if len(candidate_starts) >= candidate_limit:
@@ -401,7 +401,10 @@ def build_available_slots(
 
     slots = []
     for slot_start in candidate_starts:
-        if has_appointment_overlap(shop.id, slot_start, service.duration_minutes, db, barber_id):
+        available_providers = available_service_providers(
+            shop, service, slot_start, db, barber_id=barber_id,
+        )
+        if not available_providers:
             continue
         local_start = slot_start.astimezone(tz)
         slots.append(
@@ -415,6 +418,95 @@ def build_available_slots(
         if selected_date is None and len(slots) == 8:
             break
     return slots
+
+
+def matching_service_offerings(shop: BarberShop, service: Service, db: Session) -> list[tuple[Service, BarberProfile]]:
+    """Find active providers offering the same public service at the same price and duration."""
+    if service.barber_id is None:
+        barbers = db.scalars(
+            select(BarberProfile)
+            .where(BarberProfile.shop_id == shop.id, BarberProfile.is_active.is_(True))
+            .order_by(BarberProfile.is_owner.desc(), BarberProfile.id.asc())
+        ).all()
+        return [(service, barber) for barber in barbers]
+    return list(
+        db.execute(
+            select(Service, BarberProfile)
+            .join(BarberProfile, BarberProfile.id == Service.barber_id)
+            .where(
+                Service.shop_id == shop.id,
+                Service.is_active.is_(True),
+                Service.name == service.name,
+                Service.description == service.description,
+                Service.duration_minutes == service.duration_minutes,
+                Service.price_cents == service.price_cents,
+                Service.booking_fee_cents == service.booking_fee_cents,
+                Service.deposit_cents == service.deposit_cents,
+                Service.platform_fee_cents == service.platform_fee_cents,
+                BarberProfile.shop_id == shop.id,
+                BarberProfile.is_active.is_(True),
+            )
+            .order_by(BarberProfile.is_owner.desc(), BarberProfile.id.asc())
+        ).all()
+    )
+
+
+def available_service_providers(
+    shop: BarberShop,
+    service: Service,
+    starts_at: datetime,
+    db: Session,
+    barber_id: int | None = None,
+) -> list[tuple[Service, BarberProfile]]:
+    local_date = starts_at.astimezone(shop_timezone(shop)).date().isoformat()
+    providers = matching_service_offerings(shop, service, db)
+    if barber_id is not None:
+        providers = [provider for provider in providers if provider[1].id == barber_id]
+    return [
+        provider
+        for provider in providers
+        if not is_barber_blocked(shop.id, provider[1].id, local_date, db)
+        and not has_appointment_overlap(
+            shop.id, starts_at, provider[0].duration_minutes, db, provider[1].id,
+        )
+    ]
+
+
+def assign_available_service_provider(
+    shop: BarberShop,
+    service: Service,
+    starts_at: datetime,
+    db: Session,
+    barber_id: int | None = None,
+) -> tuple[Service, BarberProfile] | None:
+    providers = available_service_providers(shop, service, starts_at, db, barber_id=barber_id)
+    if not providers:
+        return None
+    owner_provider = next((provider for provider in providers if provider[1].is_owner), None)
+    return owner_provider or secure_choice(providers)
+
+
+def public_service_signature(service: Service) -> tuple[object, ...]:
+    return (
+        service.name.casefold(),
+        service.description or "",
+        service.duration_minutes,
+        service.price_cents,
+        service.booking_fee_cents,
+        service.deposit_cents,
+        service.platform_fee_cents,
+    )
+
+
+def unique_public_services(services: list[Service]) -> list[Service]:
+    choices: list[Service] = []
+    signatures: set[tuple[object, ...]] = set()
+    for service in services:
+        signature = public_service_signature(service)
+        if signature not in signatures:
+            signatures.add(signature)
+            choices.append(service)
+    return choices
 
 
 def validate_service_amounts(service_data: dict) -> None:
@@ -1178,11 +1270,13 @@ def get_public_shop(shop_slug: str, db: Session = Depends(get_db)):
     if not shop_is_publishable(shop):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop is not published yet")
 
-    services = db.scalars(
+    all_services = list(db.scalars(
         select(Service)
+        .outerjoin(BarberProfile, BarberProfile.id == Service.barber_id)
         .where(Service.shop_id == shop.id, Service.is_active.is_(True))
-        .order_by(Service.name.asc())
-    ).all()
+        .order_by(Service.name.asc(), BarberProfile.is_owner.desc(), Service.id.asc())
+    ).all())
+    services = unique_public_services(all_services)
     barbers = db.scalars(
         select(BarberProfile)
         .where(BarberProfile.shop_id == shop.id, BarberProfile.is_active.is_(True))
@@ -1211,11 +1305,13 @@ def get_shop_slots(
     if not shop_is_publishable(shop):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop is not published yet")
 
-    services = db.scalars(
+    all_services = list(db.scalars(
         select(Service)
+        .outerjoin(BarberProfile, BarberProfile.id == Service.barber_id)
         .where(Service.shop_id == shop.id, Service.is_active.is_(True))
-        .order_by(Service.name.asc())
-    ).all()
+        .order_by(Service.name.asc(), BarberProfile.is_owner.desc(), Service.id.asc())
+    ).all())
+    services = unique_public_services(all_services)
     if not services:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No services configured")
 
@@ -1227,11 +1323,6 @@ def get_shop_slots(
     ).all()
     if barber_id is not None and not any(barber.id == barber_id for barber in barbers):
         raise HTTPException(status_code=404, detail="Barber not found")
-    if service.barber_id is not None:
-        if barber_id is not None and barber_id != service.barber_id:
-            raise HTTPException(status_code=400, detail="This service is offered by a different barber")
-        barber_id = service.barber_id
-        barbers = [barber for barber in barbers if barber.id == service.barber_id]
     recommended_barber = choose_fair_barber(shop.id, db)
     slots = build_available_slots(shop, service, db, selected_date, barber_id)
 
@@ -1279,47 +1370,23 @@ def create_booking_checkout(
     if service is None:
         raise HTTPException(status_code=404, detail="Service not found")
 
-    if service.barber_id is not None and payload.barber_id not in (None, service.barber_id):
-        raise HTTPException(status_code=400, detail="This service is offered by a different barber")
-
-    barber = None
-    selected_barber_id = service.barber_id or payload.barber_id
-    if selected_barber_id:
-        barber = db.scalar(
-            select(BarberProfile).where(
-                BarberProfile.id == selected_barber_id,
-                BarberProfile.shop_id == shop.id,
-                BarberProfile.is_active.is_(True),
-            )
-        )
-        if barber is None:
-            raise HTTPException(status_code=404, detail="Barber not found")
-    else:
-        active_barbers = db.scalars(
-            select(BarberProfile).where(
-                BarberProfile.shop_id == shop.id,
-                BarberProfile.is_active.is_(True),
-            )
-        ).all()
-        if len(active_barbers) > 1:
-            raise HTTPException(status_code=400, detail="Choose a barber before booking")
-        barber = active_barbers[0] if active_barbers else None
-
-    if barber:
-        local_date = payload.starts_at.astimezone(shop_timezone(shop)).date().isoformat()
-        if is_barber_blocked(shop.id, barber.id, local_date, db):
-            raise HTTPException(status_code=409, detail="That barber is blocked out on this date")
-
     local_start_date = payload.starts_at.astimezone(shop_timezone(shop)).date()
     available_slots = build_available_slots(
         shop=shop,
         service=service,
         db=db,
         selected_date=local_start_date,
-        barber_id=barber.id if barber else None,
+        barber_id=payload.barber_id,
     )
     if payload.starts_at not in {slot.starts_at for slot in available_slots}:
-        raise HTTPException(status_code=409, detail="That time is outside this shop's available hours")
+        raise HTTPException(status_code=409, detail="That time is no longer available")
+
+    assignment = assign_available_service_provider(
+        shop, service, payload.starts_at, db, barber_id=payload.barber_id,
+    )
+    if assignment is None:
+        raise HTTPException(status_code=409, detail="That time is no longer available")
+    service, barber = assignment
 
     conflict_query = select(Appointment).where(
         Appointment.shop_id == shop.id,

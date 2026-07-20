@@ -26,7 +26,6 @@ export default function ShopBookingPage() {
   const [availability, setAvailability] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [selectedServiceId, setSelectedServiceId] = useState(null);
-  const [selectedBarberId, setSelectedBarberId] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paymentOption, setPaymentOption] = useState("pay_in_full");
   const [client, setClient] = useState({ client_name: "", client_phone: "", sms_opt_in: true });
@@ -53,7 +52,6 @@ export default function ShopBookingPage() {
         const query = new URLSearchParams();
         if (selectedServiceId) query.set("service_id", selectedServiceId);
         if (selectedDate) query.set("selected_date", selectedDate);
-        if (selectedBarberId) query.set("barber_id", selectedBarberId);
         const queryString = query.toString() ? `?${query.toString()}` : "";
         const response = await fetch(`${API_BASE_URL}/api/shops/${shopSlug}/slots${queryString}`);
 
@@ -64,10 +62,13 @@ export default function ShopBookingPage() {
         const data = await response.json();
         if (isMounted) {
           setAvailability(data);
-          setSelectedServiceId((current) => current ?? data.service.id);
-          setSelectedBarberId((current) => current || (data.barbers.length === 1 ? String(data.barbers[0].id) : ""));
           setSelectedSlot(null);
-          if (findingInitialAvailability && data.slots.length === 0 && (data.barbers.length <= 1 || selectedBarberId)) {
+          if (!selectedServiceId) {
+            setFindingInitialAvailability(false);
+            setStatus("ready");
+            return;
+          }
+          if (findingInitialAvailability && data.slots.length === 0) {
             const nextDate = new Date(`${selectedDate}T12:00:00`);
             nextDate.setDate(nextDate.getDate() + 1);
             const nextDateIso = nextDate.toISOString().slice(0, 10);
@@ -93,7 +94,7 @@ export default function ShopBookingPage() {
     return () => {
       isMounted = false;
     };
-  }, [shopSlug, selectedServiceId, selectedDate, selectedBarberId]);
+  }, [shopSlug, selectedServiceId, selectedDate]);
 
   async function createCheckout() {
     if (!selectedSlot || !selectedServiceId || (client.sms_opt_in && !client.client_phone) || (!client.sms_opt_in && !client.client_name)) return;
@@ -104,7 +105,7 @@ export default function ShopBookingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         service_id: selectedServiceId,
-        barber_id: selectedBarberId ? Number(selectedBarberId) : null,
+        barber_id: null,
         payment_option: paymentOption,
         starts_at: selectedSlot.starts_at,
         client_phone: client.client_phone,
@@ -133,8 +134,6 @@ export default function ShopBookingPage() {
       ? selectedService?.price_cents ?? 0
       : selectedService?.booking_fee_cents ?? 300;
   const bookingFeeCents = selectedService?.booking_fee_cents ?? 300;
-  const activeBarbers = availability?.barbers ?? [];
-  const showBarberPicker = activeBarbers.length > 1;
   const selectedDateHour = availability?.date_hour_overrides?.find((item) => item.specific_date === selectedDate);
   const bookingWindowDays = availability?.shop?.booking_window_days ?? 30;
   const shopTimeZone = availability?.shop?.timezone ?? "";
@@ -154,7 +153,7 @@ export default function ShopBookingPage() {
       <div className="mb-8">
         <h1 className="mt-2 text-3xl font-bold">Book with {availability?.shop_name ?? displayName}</h1>
         <p className="mt-3 text-zinc-700">
-          Pick a service, barber, date, and time up to {bookingWindowDays} days ahead.
+          Pick a service, then choose a date and time up to {bookingWindowDays} days ahead.
         </p>
       </div>
 
@@ -191,12 +190,12 @@ export default function ShopBookingPage() {
               <div className="mt-4 grid gap-3">
                 {availability.services.map((service) => (
                   <button
-                    key={service.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedServiceId(service.id);
-                      setSelectedBarberId(service.barber_id ? String(service.barber_id) : "");
-                    }}
+                  key={service.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedServiceId(service.id);
+                    setFindingInitialAvailability(true);
+                  }}
                     className={`rounded-md border p-4 text-left ${
                       selectedServiceId === service.id
                         ? "border-zinc-950 bg-zinc-950 text-white"
@@ -212,58 +211,44 @@ export default function ShopBookingPage() {
               </div>
             </div>
 
-            {showBarberPicker && (
-              <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                <h2 className="text-xl font-semibold">Barber</h2>
-                <select
-                  value={selectedBarberId}
-                  onChange={(event) => setSelectedBarberId(event.target.value)}
-                  className="mt-4 w-full rounded-md border border-zinc-300 px-3 py-2"
-                >
-                  <option value="">Choose a barber</option>
-                  {activeBarbers.map((barber) => (
-                    <option key={barber.id} value={barber.id}>
-                      {barber.display_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div className="order-first rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold">Time</h2>
-              <label className="mt-4 grid gap-1 text-sm font-medium">
-                Date
-                <input
-                  type="date"
-                  value={selectedDate}
-                  min={new Date().toISOString().slice(0, 10)}
-                  max={maxDate}
-                  onChange={(event) => { setFindingInitialAvailability(false); setSelectedDate(event.target.value); }}
-                  className="booking-date-input mt-1 min-w-0 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950"
-                />
-              </label>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {availability.slots.map((slot) => (
-                  <button
-                    key={slot.starts_at}
-                    type="button"
-                    onClick={() => setSelectedSlot(slot)}
-                    className={`rounded-md border px-4 py-3 text-left text-sm font-semibold transition ${
-                      selectedSlot?.starts_at === slot.starts_at
-                        ? "border-zinc-950 bg-zinc-950 text-white"
-                        : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-400"
-                    }`}
-                  >
-                    {slot.label}
-                  </button>
-                ))}
-                {availability.slots.length === 0 && (
-                  <p className="col-span-full rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                    No open times for this date{showBarberPicker && !selectedBarberId ? ". Choose a barber to see availability." : "."}
-                  </p>
-                )}
-              </div>
+              {!selectedServiceId ? (
+                <p className="mt-4 rounded-md bg-stone-50 p-3 text-sm text-zinc-700">Choose a service to see available appointment times.</p>
+              ) : (
+                <>
+                  <label className="mt-4 grid gap-1 text-sm font-medium">
+                    Date
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      min={new Date().toISOString().slice(0, 10)}
+                      max={maxDate}
+                      onChange={(event) => { setFindingInitialAvailability(false); setSelectedDate(event.target.value); }}
+                      className="booking-date-input mt-1 min-w-0 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-950"
+                    />
+                  </label>
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {availability.slots.map((slot) => (
+                      <button
+                        key={slot.starts_at}
+                        type="button"
+                        onClick={() => setSelectedSlot(slot)}
+                        className={`rounded-md border px-4 py-3 text-left text-sm font-semibold transition ${
+                          selectedSlot?.starts_at === slot.starts_at
+                            ? "border-zinc-950 bg-zinc-950 text-white"
+                            : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-400"
+                        }`}
+                      >
+                        {slot.label}
+                      </button>
+                    ))}
+                    {availability.slots.length === 0 && (
+                      <p className="col-span-full rounded-md bg-amber-50 p-3 text-sm text-amber-800">No open times for this date.</p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -284,14 +269,10 @@ export default function ShopBookingPage() {
                   <dd className="text-right font-medium">{selectedSlotVisitorTime}</dd>
                 </div>
               )}
-              {showBarberPicker && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-zinc-600">Barber</dt>
-                  <dd className="font-medium">
-                    {activeBarbers.find((barber) => String(barber.id) === selectedBarberId)?.display_name ?? "Choose a barber"}
-                  </dd>
-                </div>
-              )}
+              <div className="flex justify-between gap-4">
+                <dt className="text-zinc-600">Provider</dt>
+                <dd className="text-right font-medium">Assigned based on availability</dd>
+              </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-zinc-600">Payment choice</dt>
                 <dd className="text-right font-medium">
@@ -366,7 +347,7 @@ export default function ShopBookingPage() {
             <button
               type="button"
               onClick={createCheckout}
-              disabled={!selectedSlot || (client.sms_opt_in ? !client.client_phone : !client.client_name) || (showBarberPicker && !selectedBarberId)}
+              disabled={!selectedSlot || (client.sms_opt_in ? !client.client_phone : !client.client_name)}
               className="mt-6 w-full rounded-md bg-emerald-700 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
               Continue to payment
