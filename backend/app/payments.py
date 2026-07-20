@@ -77,6 +77,24 @@ def create_shop_setup_checkout(shop: BarberShop) -> tuple[str | None, str | None
     return session.id, session.url
 
 
+def is_paid_shop_setup_checkout(shop: BarberShop) -> bool:
+    """Verify an existing setup Checkout Session with Stripe before publishing a shop."""
+    if not stripe_is_configured() or not shop.stripe_setup_checkout_session_id:
+        return False
+
+    try:
+        session = stripe.checkout.Session.retrieve(shop.stripe_setup_checkout_session_id)
+    except stripe.StripeError:
+        return False
+
+    metadata = session.get("metadata") or {}
+    return (
+        metadata.get("purpose") == "shop_setup"
+        and metadata.get("shop_id") == str(shop.id)
+        and session.get("payment_status") == "paid"
+    )
+
+
 def create_connected_account(email: str, business_name: str) -> str | None:
     if not stripe_is_configured():
         return None

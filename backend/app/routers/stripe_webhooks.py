@@ -32,7 +32,12 @@ async def stripe_webhook(
     event_type = event["type"]
     data = event["data"]["object"]
 
-    if event_type == "checkout.session.completed":
+    if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
+        # A Checkout Session can complete while a delayed payment remains unpaid.
+        # Never publish a shop or appointment until Stripe reports available funds.
+        if data.get("payment_status") != "paid":
+            return {"received": True}
+
         metadata = data.get("metadata", {})
         purpose = metadata.get("purpose")
 
