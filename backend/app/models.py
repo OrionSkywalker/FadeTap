@@ -192,6 +192,7 @@ class Appointment(Base):
     booking_fee_cents: Mapped[int] = mapped_column(Integer, default=300)
     deposit_cents: Mapped[int] = mapped_column(Integer, default=200)
     platform_fee_cents: Mapped[int] = mapped_column(Integer, default=100)
+    stripe_processing_fee_cents: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     shop: Mapped["BarberShop"] = relationship(back_populates="appointments")
@@ -229,6 +230,7 @@ class CheckoutAttempt(Base):
     booking_fee_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     deposit_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     platform_fee_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    stripe_processing_fee_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="checkout_started")
     stripe_checkout_session_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

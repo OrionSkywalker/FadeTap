@@ -52,6 +52,36 @@ def stripe_is_configured() -> bool:
     return bool(stripe.api_key and stripe.api_key.startswith("sk_"))
 
 
+def get_payment_processing_fee_cents(payment_intent_id: str | None) -> int | None:
+    """Return Stripe's actual processing fee for a completed platform charge.
+
+    Destination charges debit Stripe processing costs from the platform balance,
+    so the Balance Transaction fee—not an estimated card-rate formula—is the
+    amount that must be excluded from FadeTap's monthly net revenue.
+    """
+    if not payment_intent_id or not stripe_is_configured():
+        return None
+
+    try:
+        intent = stripe.PaymentIntent.retrieve(
+            payment_intent_id,
+            expand=["latest_charge.balance_transaction"],
+        )
+        charge = intent.get("latest_charge")
+        if not charge:
+            return None
+        balance_transaction = charge.get("balance_transaction") if hasattr(charge, "get") else None
+        if isinstance(balance_transaction, str):
+            balance_transaction = stripe.BalanceTransaction.retrieve(balance_transaction)
+        if not balance_transaction:
+            return None
+        return int(balance_transaction.get("fee", 0))
+    except stripe.StripeError:
+        # Never block appointment confirmation because Stripe's reporting data
+        # is temporarily unavailable. A later dashboard refresh retries it.
+        return None
+
+
 def create_shop_setup_checkout(shop: BarberShop) -> tuple[str | None, str | None]:
     if not stripe_is_configured():
         return None, None

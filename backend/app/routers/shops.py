@@ -29,6 +29,7 @@ from ..payments import (
     create_connected_account,
     create_monthly_access_checkout,
     create_shop_setup_checkout,
+    get_payment_processing_fee_cents,
     get_open_shop_setup_checkout_url,
     is_paid_shop_setup_checkout,
     retrieve_connected_account_status,
@@ -119,6 +120,7 @@ def sync_connected_account_statuses(shop: BarberShop, barbers: list[BarberProfil
 
 
 def serialize_dashboard(user: User, shop: BarberShop, db: Session) -> DashboardResponse:
+    refresh_recent_processing_fees(shop.id, db)
     sync_shop_access(shop, db)
     barbers = db.scalars(
         select(BarberProfile)
@@ -171,6 +173,8 @@ def serialize_dashboard(user: User, shop: BarberShop, db: Session) -> DashboardR
         upcoming_appointments=appointments,
         blockouts=blockouts,
         platform_fees_this_month_cents=platform_fees_for_month(shop.id, month_start(), db),
+        previous_month_platform_fees_cents=platform_fees_for_month(shop.id, month_start(1), db),
+        monthly_platform_fee_target_cents=MONTHLY_PLATFORM_FEE_CAP_CENTS,
     )
 
 
@@ -188,23 +192,59 @@ def month_start(offset: int = 0) -> datetime:
 
 
 def platform_fees_for_month(shop_id: int, start: datetime, db: Session) -> int:
-    end = month_start(-1) if start.month == 12 else datetime(start.year + (start.month == 12), (start.month % 12) + 1, 1)
-    return int(db.scalar(select(func.coalesce(func.sum(Appointment.platform_fee_cents), 0)).where(
+    end = datetime(start.year + 1, 1, 1) if start.month == 12 else datetime(start.year, start.month + 1, 1)
+    net_platform_fee = Appointment.platform_fee_cents - Appointment.stripe_processing_fee_cents
+    return int(db.scalar(select(func.coalesce(func.sum(net_platform_fee), 0)).where(
         Appointment.shop_id == shop_id, Appointment.status == "confirmed",
         Appointment.starts_at >= start, Appointment.starts_at < end,
     )) or 0)
 
 
+def refresh_recent_processing_fees(shop_id: int, db: Session) -> None:
+    """Backfill actual Stripe processing fees for recent paid appointments.
+
+    The first dashboard visit after this release also corrects existing recent
+    appointments that were created before processing fees were stored.
+    """
+    appointments = db.scalars(
+        select(Appointment)
+        .where(
+            Appointment.shop_id == shop_id,
+            Appointment.status == "confirmed",
+            Appointment.starts_at >= month_start(2),
+            Appointment.stripe_payment_intent_id.is_not(None),
+            Appointment.stripe_processing_fee_cents == 0,
+        )
+        .limit(100)
+    ).all()
+    changed = False
+    for appointment in appointments:
+        fee_cents = get_payment_processing_fee_cents(appointment.stripe_payment_intent_id)
+        if fee_cents is not None:
+            appointment.stripe_processing_fee_cents = fee_cents
+            changed = True
+    if changed:
+        db.commit()
+
+
 def sync_shop_access(shop: BarberShop, db: Session) -> None:
     current_month = month_start().strftime("%Y-%m")
     current_fees = platform_fees_for_month(shop.id, month_start(), db)
+    previous_month_start = month_start(1)
+    previous_month = previous_month_start.strftime("%Y-%m")
+    previous_fees = platform_fees_for_month(shop.id, previous_month_start, db)
+    shop_created_at = shop.created_at.replace(tzinfo=timezone.utc) if shop.created_at.tzinfo is None else shop.created_at
+    had_full_previous_month = shop_created_at < previous_month_start
+
     if current_fees >= MONTHLY_PLATFORM_FEE_CAP_CENTS or shop.monthly_access_paid_month == current_month:
+        shop.access_warning_month, shop.access_suspended = None, False
+    elif not had_full_previous_month or previous_fees >= MONTHLY_PLATFORM_FEE_CAP_CENTS or shop.monthly_access_paid_month == previous_month:
         shop.access_warning_month, shop.access_suspended = None, False
     elif shop.access_warning_month and shop.access_warning_month != current_month:
         shop.access_suspended = True
-    elif (platform_fees_for_month(shop.id, month_start(1), db) < MONTHLY_PLATFORM_FEE_CAP_CENTS and
-          platform_fees_for_month(shop.id, month_start(2), db) < MONTHLY_PLATFORM_FEE_CAP_CENTS):
+    else:
         shop.access_warning_month = current_month
+        shop.access_suspended = False
     db.commit()
 
 

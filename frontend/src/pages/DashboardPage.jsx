@@ -480,7 +480,7 @@ export default function DashboardPage() {
         <p className="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"><span className="font-semibold">Message from platform support:</span> {dashboard.shop.admin_message}</p>
       )}
       {dashboard.shop.access_warning_month && !dashboard.shop.access_suspended && (
-        <div className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/70 dark:text-amber-100"><p><span className="font-semibold">Account notice:</span> Your shop has generated ${(dashboard.platform_fees_this_month_cents / 100).toFixed(2)} of the $25.00 monthly platform-fee threshold. Reach it this month to keep uninterrupted access.</p><button type="button" onClick={payForMonthlyAccess} className="mt-3 rounded-md bg-amber-800 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Pay $25 for this month</button></div>
+        <div className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/70 dark:text-amber-100"><p><span className="font-semibold">Account notice:</span> Last month, FadeTap received ${centsToDollars(dashboard.previous_month_platform_fees_cents)} after Stripe processing fees, below the ${centsToDollars(dashboard.monthly_platform_fee_target_cents)} monthly expectation. Reach that amount this month to keep uninterrupted access.</p><button type="button" onClick={payForMonthlyAccess} className="mt-3 rounded-md bg-amber-800 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Pay $25 for this month</button></div>
       )}
       {dashboard.shop.access_suspended && (
         <div className="mb-5 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/70 dark:text-red-100"><p><span className="font-semibold">Access paused:</span> Pay $25 for the current month to restore booking access immediately.</p><button type="button" onClick={payForMonthlyAccess} className="mt-3 rounded-md bg-red-800 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Pay $25 and restore access</button></div>
@@ -1028,6 +1028,13 @@ export default function DashboardPage() {
           </div>
         </details>
       </div>
+
+      {!dashboard.shop.access_warning_month && !dashboard.shop.access_suspended && (
+        <div className="mt-8 flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 sm:flex-row sm:items-center sm:justify-between">
+          <p><span className="font-semibold">Monthly access:</span> FadeTap has received ${centsToDollars(dashboard.platform_fees_this_month_cents)} after Stripe processing fees toward this month&apos;s ${centsToDollars(dashboard.monthly_platform_fee_target_cents)} expectation.</p>
+          <button type="button" onClick={payForMonthlyAccess} className="shrink-0 rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-stone-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">Pay $25 directly</button>
+        </div>
+      )}
     </section>
   );
 }

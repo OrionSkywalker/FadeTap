@@ -19,7 +19,8 @@ class ShopMessage(BaseModel):
 
 @router.get("/shops")
 def shops(_: User = Depends(admin_user), db: Session = Depends(get_db)):
-    rows = db.execute(select(BarberShop, func.count(Appointment.id), func.coalesce(func.sum(Appointment.platform_fee_cents), 0))
+    net_platform_fee = Appointment.platform_fee_cents - Appointment.stripe_processing_fee_cents
+    rows = db.execute(select(BarberShop, func.count(Appointment.id), func.coalesce(func.sum(net_platform_fee), 0))
         .outerjoin(Appointment, (Appointment.shop_id == BarberShop.id) & (Appointment.status == "confirmed"))
         .group_by(BarberShop.id).order_by(BarberShop.created_at.desc())).all()
     return [{"id": shop.id, "name": shop.name, "slug": shop.slug, "owner_email": shop.owner_email,

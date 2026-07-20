@@ -5,6 +5,15 @@ from .database import engine
 
 def run_startup_migrations() -> None:
     if engine.dialect.name != "sqlite":
+        # Production uses PostgreSQL, where create_all does not add fields to
+        # existing tables. Keep this small additive migration safe to run at startup.
+        with engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS stripe_processing_fee_cents INTEGER DEFAULT 0"
+            ))
+            connection.execute(text(
+                "ALTER TABLE checkout_attempts ADD COLUMN IF NOT EXISTS stripe_processing_fee_cents INTEGER DEFAULT 0"
+            ))
         return
 
     with engine.begin() as connection:
@@ -33,6 +42,8 @@ def run_startup_migrations() -> None:
         appointment_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(appointments)").all()}
         if "sms_opt_in" not in appointment_columns:
             connection.execute(text("ALTER TABLE appointments ADD COLUMN sms_opt_in BOOLEAN DEFAULT 1"))
+        if "stripe_processing_fee_cents" not in appointment_columns:
+            connection.execute(text("ALTER TABLE appointments ADD COLUMN stripe_processing_fee_cents INTEGER DEFAULT 0"))
         connection.execute(text("""
             CREATE TABLE IF NOT EXISTS client_notes (
                 id INTEGER NOT NULL PRIMARY KEY, shop_id INTEGER NOT NULL, barber_id INTEGER NOT NULL,
@@ -141,6 +152,8 @@ def run_startup_migrations() -> None:
         attempt_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(checkout_attempts)").all()}
         if "sms_opt_in" not in attempt_columns:
             connection.execute(text("ALTER TABLE checkout_attempts ADD COLUMN sms_opt_in BOOLEAN DEFAULT 1"))
+        if "stripe_processing_fee_cents" not in attempt_columns:
+            connection.execute(text("ALTER TABLE checkout_attempts ADD COLUMN stripe_processing_fee_cents INTEGER DEFAULT 0"))
 
         connection.execute(
             text(

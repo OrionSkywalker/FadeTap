@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Appointment, BarberProfile, BarberShop, CheckoutAttempt, Service
+from ..payments import get_payment_processing_fee_cents
 
 router = APIRouter(prefix="/api/stripe", tags=["stripe"])
 
@@ -59,6 +60,9 @@ async def stripe_webhook(
                 select(CheckoutAttempt).where(CheckoutAttempt.id == int(metadata["checkout_attempt_id"]))
             )
             if attempt and attempt.status == "checkout_started":
+                processing_fee_cents = get_payment_processing_fee_cents(data.get("payment_intent"))
+                if processing_fee_cents is not None:
+                    attempt.stripe_processing_fee_cents = processing_fee_cents
                 service = db.scalar(select(Service).where(Service.id == attempt.service_id, Service.shop_id == attempt.shop_id))
                 overlapping = False
                 if service:
@@ -96,6 +100,7 @@ async def stripe_webhook(
                         booking_fee_cents=attempt.booking_fee_cents,
                         deposit_cents=attempt.deposit_cents,
                         platform_fee_cents=attempt.platform_fee_cents,
+                        stripe_processing_fee_cents=attempt.stripe_processing_fee_cents,
                     )
                     db.add(appointment)
                     attempt.status = "paid"
@@ -104,6 +109,23 @@ async def stripe_webhook(
                     attempt.status = "paid_conflict"
 
         db.commit()
+
+    if event_type == "charge.succeeded":
+        # Checkout completion normally captures the fee above. Keep this event
+        # as a reconciliation path when Stripe's balance transaction is ready
+        # after the Checkout event has been delivered.
+        payment_intent_id = data.get("payment_intent")
+        processing_fee_cents = get_payment_processing_fee_cents(payment_intent_id)
+        if payment_intent_id and processing_fee_cents is not None:
+            for appointment in db.scalars(
+                select(Appointment).where(Appointment.stripe_payment_intent_id == payment_intent_id)
+            ):
+                appointment.stripe_processing_fee_cents = processing_fee_cents
+            for attempt in db.scalars(
+                select(CheckoutAttempt).where(CheckoutAttempt.stripe_payment_intent_id == payment_intent_id)
+            ):
+                attempt.stripe_processing_fee_cents = processing_fee_cents
+            db.commit()
 
     if event_type == "checkout.session.expired":
         metadata = data.get("metadata", {})

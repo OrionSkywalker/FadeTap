@@ -185,6 +185,8 @@ class DashboardResponse(BaseModel):
     upcoming_appointments: list["AppointmentCalendarRead"]
     blockouts: list["BarberBlockoutRead"]
     platform_fees_this_month_cents: int = 0
+    previous_month_platform_fees_cents: int = 0
+    monthly_platform_fee_target_cents: int = 2500
 
 
 class AppointmentCreate(BaseModel):
@@ -222,6 +224,7 @@ class AppointmentRead(BaseModel):
     booking_fee_cents: int
     deposit_cents: int
     platform_fee_cents: int
+    stripe_processing_fee_cents: int = 0
 
     model_config = {"from_attributes": True}
 
