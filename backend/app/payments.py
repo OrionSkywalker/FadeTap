@@ -95,6 +95,26 @@ def is_paid_shop_setup_checkout(shop: BarberShop) -> bool:
     )
 
 
+def get_open_shop_setup_checkout_url(shop: BarberShop) -> str | None:
+    """Return the current valid setup checkout instead of creating another charge."""
+    if not stripe_is_configured() or not shop.stripe_setup_checkout_session_id:
+        return None
+
+    try:
+        session = stripe.checkout.Session.retrieve(shop.stripe_setup_checkout_session_id)
+    except stripe.StripeError:
+        return None
+
+    metadata = session.get("metadata") or {}
+    if (
+        metadata.get("purpose") != "shop_setup"
+        or metadata.get("shop_id") != str(shop.id)
+        or session.get("status") != "open"
+    ):
+        return None
+    return session.get("url")
+
+
 def create_connected_account(email: str, business_name: str) -> str | None:
     if not stripe_is_configured():
         return None

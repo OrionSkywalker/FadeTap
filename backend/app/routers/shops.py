@@ -28,6 +28,7 @@ from ..payments import (
     create_connected_account,
     create_monthly_access_checkout,
     create_shop_setup_checkout,
+    get_open_shop_setup_checkout_url,
     is_paid_shop_setup_checkout,
     retrieve_connected_account_status,
     select_payout_account,
@@ -610,6 +611,13 @@ def create_setup_payment_retry(
         shop.setup_payment_status = "paid"
         db.commit()
         return ConnectLinkResponse(message="Setup payment confirmed. Your shop is now published.")
+
+    existing_checkout_url = get_open_shop_setup_checkout_url(shop)
+    if existing_checkout_url:
+        return ConnectLinkResponse(
+            url=existing_checkout_url,
+            message="Continue the existing setup payment instead of starting another one.",
+        )
 
     session_id, setup_url = create_shop_setup_checkout(shop)
     shop.stripe_setup_checkout_session_id = session_id
