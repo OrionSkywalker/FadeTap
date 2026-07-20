@@ -76,7 +76,7 @@ def get_payment_processing_fee_cents(payment_intent_id: str | None) -> int | Non
         if not balance_transaction:
             return None
         return int(balance_transaction.get("fee", 0))
-    except stripe.StripeError:
+    except Exception:
         # Never block appointment confirmation because Stripe's reporting data
         # is temporarily unavailable. A later dashboard refresh retries it.
         return None

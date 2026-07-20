@@ -476,8 +476,8 @@ export default function DashboardPage() {
         </p>
       )}
 
-      {dashboard.shop.admin_message && (
-        <p className="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"><span className="font-semibold">Message from platform support:</span> {dashboard.shop.admin_message}</p>
+      {dashboard.unread_admin_message && (
+        <p className="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"><span className="font-semibold">Message from platform support:</span> {dashboard.unread_admin_message}</p>
       )}
       {dashboard.shop.access_warning_month && !dashboard.shop.access_suspended && (
         <div className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/70 dark:text-amber-100"><p><span className="font-semibold">Account notice:</span> Last month, FadeTap received ${centsToDollars(dashboard.previous_month_platform_fees_cents)} after Stripe processing fees, below the ${centsToDollars(dashboard.monthly_platform_fee_target_cents)} monthly expectation. Reach that amount this month to keep uninterrupted access.</p><button type="button" onClick={payForMonthlyAccess} className="mt-3 rounded-md bg-amber-800 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Pay $25 for this month</button></div>

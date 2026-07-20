@@ -187,6 +187,7 @@ class DashboardResponse(BaseModel):
     platform_fees_this_month_cents: int = 0
     previous_month_platform_fees_cents: int = 0
     monthly_platform_fee_target_cents: int = 2500
+    unread_admin_message: str | None = None
 
 
 class AppointmentCreate(BaseModel):

@@ -163,7 +163,8 @@ def serialize_dashboard(user: User, shop: BarberShop, db: Session) -> DashboardR
         ).all()
     )
     date_hour_overrides = get_date_hour_overrides(shop.id, db)
-    return DashboardResponse(
+    unread_admin_message = shop.admin_message
+    response = DashboardResponse(
         user=user,
         shop=shop,
         barbers=list(barbers),
@@ -175,7 +176,12 @@ def serialize_dashboard(user: User, shop: BarberShop, db: Session) -> DashboardR
         platform_fees_this_month_cents=platform_fees_for_month(shop.id, month_start(), db),
         previous_month_platform_fees_cents=platform_fees_for_month(shop.id, month_start(1), db),
         monthly_platform_fee_target_cents=MONTHLY_PLATFORM_FEE_CAP_CENTS,
+        unread_admin_message=unread_admin_message,
     )
+    if unread_admin_message:
+        shop.admin_message = None
+        db.commit()
+    return response
 
 
 def hold_platform_fee_cents(booking_fee_cents: int) -> int:
@@ -233,8 +239,11 @@ def sync_shop_access(shop: BarberShop, db: Session) -> None:
     previous_month_start = month_start(1)
     previous_month = previous_month_start.strftime("%Y-%m")
     previous_fees = platform_fees_for_month(shop.id, previous_month_start, db)
-    shop_created_at = shop.created_at.replace(tzinfo=timezone.utc) if shop.created_at.tzinfo is None else shop.created_at
-    had_full_previous_month = shop_created_at < previous_month_start
+    if shop.created_at is None:
+        had_full_previous_month = False
+    else:
+        shop_created_at = shop.created_at.astimezone(timezone.utc).replace(tzinfo=None) if shop.created_at.tzinfo else shop.created_at
+        had_full_previous_month = shop_created_at < previous_month_start
 
     if current_fees >= MONTHLY_PLATFORM_FEE_CAP_CENTS or shop.monthly_access_paid_month == current_month:
         shop.access_warning_month, shop.access_suspended = None, False
