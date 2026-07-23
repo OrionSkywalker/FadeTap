@@ -487,13 +487,16 @@ def build_available_slots(
             continue
         opens_at = datetime.combine(local_day, parse_hhmm(business_hour.opens_at), tzinfo=tz)
         closes_at = datetime.combine(local_day, parse_hhmm(business_hour.closes_at), tzinfo=tz)
-        slot_start = opens_at
+        slot_start = opens_at.replace(minute=(opens_at.minute // 30) * 30, second=0, microsecond=0)
+        if slot_start < opens_at:
+            slot_start += timedelta(minutes=30)
         while slot_start + timedelta(minutes=service.duration_minutes) <= closes_at:
             if slot_start > now_local + timedelta(minutes=30):
                 candidate_starts.append(slot_start.astimezone(timezone.utc))
-            # Quarter-hour starts accommodate services such as 45-minute cuts
-            # without forcing providers into half-hour-only gaps.
-            slot_start += timedelta(minutes=15)
+            # Client-facing bookings always start on the half hour. The overlap
+            # check below remains duration-aware, so a 45-minute appointment
+            # can leave a 15-minute gap without creating an invalid slot.
+            slot_start += timedelta(minutes=30)
             if len(candidate_starts) >= candidate_limit:
                 break
         if len(candidate_starts) >= candidate_limit:
