@@ -315,7 +315,7 @@ export default function ShopBookingPage() {
                 </span>
               </label>
               <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-                Online payments are non-refundable.
+                Online payments are generally non-refundable, except where required by law or approved by the service provider or FadeTap.
               </p>
             </div>
 

@@ -21,6 +21,8 @@ from ..models import (
     BarberShop,
     BusinessHour,
     CheckoutAttempt,
+    PaymentDispute,
+    PaymentRefund,
     PlatformSettings,
     Service,
     ShopDateHourOverride,
@@ -199,6 +201,13 @@ def serialize_dashboard(user: User, shop: BarberShop, db: Session) -> DashboardR
         ).all()
     )
     date_hour_overrides = get_date_hour_overrides(shop.id, db)
+    payment_issues = [
+        {"kind": "refund", "amount_cents": item.amount_cents, "status": item.status, "reason": item.reason, "created_at": item.created_at}
+        for item in db.scalars(select(PaymentRefund).join(Appointment).where(Appointment.shop_id == shop.id).order_by(PaymentRefund.created_at.desc())).all()
+    ] + [
+        {"kind": "dispute", "amount_cents": item.amount_cents, "status": item.status, "reason": item.reason, "due_by": item.due_by, "created_at": item.created_at}
+        for item in db.scalars(select(PaymentDispute).join(Appointment).where(Appointment.shop_id == shop.id).order_by(PaymentDispute.created_at.desc())).all()
+    ]
     unread_admin_message = shop.admin_message
     response = DashboardResponse(
         user=user,
@@ -213,6 +222,7 @@ def serialize_dashboard(user: User, shop: BarberShop, db: Session) -> DashboardR
         previous_month_platform_fees_cents=platform_fees_for_month(shop.id, month_start(1), db),
         monthly_platform_fee_target_cents=MONTHLY_PLATFORM_FEE_CAP_CENTS,
         unread_admin_message=unread_admin_message,
+        payment_issues=payment_issues,
     )
     if unread_admin_message:
         shop.admin_message = None

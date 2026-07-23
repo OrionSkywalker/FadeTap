@@ -479,6 +479,9 @@ export default function DashboardPage() {
       {dashboard.unread_admin_message && (
         <p className="mb-5 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"><span className="font-semibold">Message from platform support:</span> {dashboard.unread_admin_message}</p>
       )}
+      {dashboard.payment_issues?.length > 0 && (
+        <div className="mb-5 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/60 dark:text-red-100"><p className="font-semibold">Payment review needed</p>{dashboard.payment_issues.map((issue, index) => <p key={`${issue.kind}-${index}`} className="mt-1">{issue.kind === "dispute" ? "A payment dispute" : "A refund"} for ${centsToDollars(issue.amount_cents)} is {issue.status.replaceAll("_", " ")}. Contact FadeTap support before changing this appointment.</p>)}</div>
+      )}
       {dashboard.shop.access_warning_month && !dashboard.shop.access_suspended && (
         <div className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/70 dark:text-amber-100"><p><span className="font-semibold">Account notice:</span> Last month, FadeTap received ${centsToDollars(dashboard.previous_month_platform_fees_cents)} after Stripe processing fees, below the ${centsToDollars(dashboard.monthly_platform_fee_target_cents)} monthly expectation. Reach that amount this month to keep uninterrupted access.</p><button type="button" onClick={payForMonthlyAccess} className="mt-3 rounded-md bg-amber-800 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Pay $25 for this month</button></div>
       )}

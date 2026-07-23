@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Appointment, BarberProfile, BarberShop, CheckoutAttempt, ClientNote, PlatformSettings, Service, User
+from ..models import Appointment, BarberProfile, BarberShop, CheckoutAttempt, ClientNote, PaymentDispute, PaymentRefund, PlatformSettings, Service, User
 from ..security import get_current_user, is_platform_admin
 
 router = APIRouter(prefix="/api/admin", tags=["platform admin"])
@@ -66,6 +66,11 @@ def shops(_: User = Depends(admin_user), db: Session = Depends(get_db)):
     rows = db.execute(select(BarberShop, func.count(Appointment.id), func.coalesce(func.sum(net_platform_fee), 0))
         .outerjoin(Appointment, (Appointment.shop_id == BarberShop.id) & (Appointment.status == "confirmed"))
         .group_by(BarberShop.id).order_by(BarberShop.created_at.desc())).all()
+    issues_by_shop: dict[int, list[dict]] = {}
+    for item in db.scalars(select(PaymentRefund).join(Appointment)).all():
+        issues_by_shop.setdefault(item.appointment.shop_id, []).append({"kind": "refund", "id": item.stripe_refund_id, "amount_cents": item.amount_cents, "status": item.status, "reason": item.reason})
+    for item in db.scalars(select(PaymentDispute).join(Appointment)).all():
+        issues_by_shop.setdefault(item.appointment.shop_id, []).append({"kind": "dispute", "id": item.stripe_dispute_id, "amount_cents": item.amount_cents, "status": item.status, "reason": item.reason, "due_by": item.due_by.isoformat() if item.due_by else None})
     return [{"id": shop.id, "name": shop.name, "slug": shop.slug, "owner_email": shop.owner_email,
              "owner_google_subject": shop.owner.google_subject,
              "owner_last_login_at": shop.owner.last_login_at.isoformat() if shop.owner.last_login_at else None,
@@ -75,6 +80,7 @@ def shops(_: User = Depends(admin_user), db: Session = Depends(get_db)):
              "location_verified": shop.location_verified,
              "location_country_code": shop.location_country_code,
              "location_county": shop.location_county,
+             "payment_issues": issues_by_shop.get(shop.id, []),
              "barbers": [{"id": barber.id, "display_name": barber.display_name, "is_owner": barber.is_owner, "is_active": barber.is_active}
                          for barber in db.scalars(select(BarberProfile).where(BarberProfile.shop_id == shop.id).order_by(BarberProfile.display_name)).all()]}
             for shop, count, fees in rows]

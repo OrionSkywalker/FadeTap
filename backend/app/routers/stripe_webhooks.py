@@ -7,10 +7,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Appointment, BarberProfile, BarberShop, CheckoutAttempt, Service
+from ..models import Appointment, BarberProfile, BarberShop, CheckoutAttempt, PaymentDispute, PaymentRefund, Service, StripeEventAudit
 from ..payments import get_payment_processing_fee_cents
 
 router = APIRouter(prefix="/api/stripe", tags=["stripe"])
+
+
+def appointment_for_payment(data: dict, db: Session) -> Appointment | None:
+    payment_intent_id = data.get("payment_intent")
+    if not payment_intent_id and data.get("charge"):
+        try:
+            payment_intent_id = stripe.Charge.retrieve(data["charge"]).get("payment_intent")
+        except stripe.StripeError:
+            payment_intent_id = None
+    return db.scalar(select(Appointment).where(Appointment.stripe_payment_intent_id == payment_intent_id)) if payment_intent_id else None
+
+
+def unix_datetime(value):
+    return datetime.fromtimestamp(value, timezone.utc).replace(tzinfo=None) if value else None
 
 
 @router.post("/webhook")
@@ -32,6 +46,11 @@ async def stripe_webhook(
 
     event_type = event["type"]
     data = event["data"]["object"]
+    event_id = event.get("id")
+    if event_id and db.scalar(select(StripeEventAudit).where(StripeEventAudit.stripe_event_id == event_id)):
+        return {"received": True, "duplicate": True}
+    audit = StripeEventAudit(stripe_event_id=event_id or f"{event_type}-{data.get('id', 'unknown')}", event_type=event_type, stripe_object_id=data.get("id"))
+    db.add(audit)
 
     if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
         # A Checkout Session can complete while a delayed payment remains unpaid.
@@ -151,5 +170,33 @@ async def stripe_webhook(
         if barber:
             barber.stripe_onboarding_complete = is_complete
         db.commit()
+
+    if event_type in {"refund.created", "refund.updated", "refund.failed"}:
+        appointment = appointment_for_payment(data, db)
+        if appointment:
+            refund = db.scalar(select(PaymentRefund).where(PaymentRefund.stripe_refund_id == data["id"]))
+            if refund is None:
+                refund = PaymentRefund(appointment_id=appointment.id, stripe_refund_id=data["id"], amount_cents=data.get("amount", 0), status=data.get("status", "pending"), reason=data.get("reason"))
+                db.add(refund)
+            else:
+                refund.amount_cents, refund.status, refund.reason = data.get("amount", refund.amount_cents), data.get("status", refund.status), data.get("reason")
+            audit.appointment_id, audit.outcome = appointment.id, "refund_recorded"
+
+    if event_type in {"charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed", "charge.dispute.funds_withdrawn", "charge.dispute.funds_reinstated"}:
+        appointment = appointment_for_payment(data, db)
+        if appointment:
+            dispute = db.scalar(select(PaymentDispute).where(PaymentDispute.stripe_dispute_id == data["id"]))
+            if dispute is None:
+                dispute = PaymentDispute(appointment_id=appointment.id, stripe_dispute_id=data["id"], amount_cents=data.get("amount", 0), status=data.get("status", "needs_response"), reason=data.get("reason"), due_by=unix_datetime((data.get("evidence_details") or {}).get("due_by")))
+                db.add(dispute)
+            else:
+                dispute.amount_cents, dispute.status, dispute.reason = data.get("amount", dispute.amount_cents), data.get("status", dispute.status), data.get("reason")
+                dispute.due_by = unix_datetime((data.get("evidence_details") or {}).get("due_by")) or dispute.due_by
+            audit.appointment_id, audit.outcome = appointment.id, "dispute_recorded"
+
+    if event_type in {"charge.failed", "checkout.session.async_payment_failed", "payout.paid", "payout.failed"}:
+        audit.outcome = "recorded_for_review"
+
+    db.commit()
 
     return {"received": True}

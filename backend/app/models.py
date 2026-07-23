@@ -213,6 +213,49 @@ class Appointment(Base):
     barber: Mapped["BarberProfile | None"] = relationship(back_populates="appointments")
 
 
+class PaymentRefund(Base):
+    __tablename__ = "payment_refunds"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), index=True, nullable=False)
+    stripe_refund_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reverse_transfer: Mapped[bool] = mapped_column(Boolean, default=False)
+    refund_application_fee: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    appointment: Mapped["Appointment"] = relationship()
+
+
+class PaymentDispute(Base):
+    __tablename__ = "payment_disputes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), index=True, nullable=False)
+    stripe_dispute_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    due_by: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    appointment: Mapped["Appointment"] = relationship()
+
+
+class StripeEventAudit(Base):
+    __tablename__ = "stripe_event_audits"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    stripe_event_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    stripe_object_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"), index=True, nullable=True)
+    outcome: Mapped[str] = mapped_column(String(80), default="received")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class ClientNote(Base):
     __tablename__ = "client_notes"
 
