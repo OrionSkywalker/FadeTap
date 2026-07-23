@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../api";
 import InstallAppButton from "../components/InstallAppButton";
-import astronautArtwork from "../assets/fadetap-astronauts.png";
+import fadetapDarkLogo from "../assets/fadetap-logo-dark.png";
+import fadetapLightLogo from "../assets/fadetap-logo-light.png";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -167,12 +168,13 @@ export default function LandingPage() {
         </div>
       </div>
       </section>
-      <div className="mt-4 overflow-hidden border-t border-zinc-800 bg-black">
+      <div className="mt-4 overflow-hidden border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <img
-          src={astronautArtwork}
-          alt="FadeTap astronaut artwork"
-          className="block w-full opacity-60"
+          src={fadetapLightLogo}
+          alt="FadeTap"
+          className="block w-full dark:hidden"
         />
+        <img src={fadetapDarkLogo} alt="" className="hidden w-full dark:block" />
       </div>
     </>
   );
