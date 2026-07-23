@@ -327,9 +327,11 @@ export default function ShopBookingPage() {
                 className="rounded-md border border-zinc-300 px-3 py-2"
               />
               <input
+                type="tel"
+                inputMode="tel"
                 value={client.client_phone}
                 onChange={(event) => setClient({ ...client, client_phone: event.target.value })}
-                placeholder={client.sms_opt_in ? "Phone for SMS reminders" : "Phone number not shared"}
+                placeholder={client.sms_opt_in ? "U.S. phone for SMS reminders" : "Phone number not shared"}
                 className="rounded-md border border-zinc-300 px-3 py-2"
                 required={client.sms_opt_in}
                 disabled={!client.sms_opt_in}
@@ -338,6 +340,7 @@ export default function ShopBookingPage() {
                 <input type="checkbox" checked={!client.sms_opt_in} onChange={(event) => setClient({ ...client, sms_opt_in: !event.target.checked, client_phone: event.target.checked ? "" : client.client_phone })} />
                 <span>I prefer not to share my phone number or receive text updates.</span>
               </label>
+              <p className="text-xs text-zinc-600">FadeTap bookings and SMS updates are currently available in the United States only.</p>
             </div>
 
             {checkoutMessage && (

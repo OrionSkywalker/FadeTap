@@ -108,6 +108,7 @@ export default function LandingPage() {
           <p className="mt-5 max-w-2xl text-lg leading-8 text-zinc-700">
             FadeTap helps shops publish live availability, collect payments, and keep calendars current.
           </p>
+          <p className="mt-3 text-sm font-medium text-zinc-600">Currently available in the United States only.</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <button
               type="button"
@@ -174,13 +175,13 @@ export default function LandingPage() {
               <label htmlFor="shop-radius" className="text-sm font-semibold text-zinc-800">
                 Search range
               </label>
-              <span className="text-sm font-semibold text-emerald-800">{searchRadius} miles</span>
+              <span className="text-sm font-semibold text-emerald-800">{searchRadius === 5000 ? "Nationwide" : `${searchRadius} miles`}</span>
             </div>
             <input
               id="shop-radius"
               type="range"
               min="1"
-              max="100"
+              max="5000"
               value={searchRadius}
               onChange={(event) => setSearchRadius(Number(event.target.value))}
               disabled={!searchCoords}
@@ -188,8 +189,8 @@ export default function LandingPage() {
             />
             <p className="mt-2 text-xs text-zinc-600">
               {searchCoords
-                ? "Showing up to 20 closest shops in this range."
-                : "Share your location to filter shops by distance."}
+                ? "Showing up to 20 closest shops in this range. Choose Nationwide to search across the U.S."
+                : "Share your location to sort providers by distance. Nationwide searches are available across the U.S."}
             </p>
           </div>
 

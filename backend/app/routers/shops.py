@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
+import re
 from secrets import choice as secure_choice
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -75,6 +76,7 @@ ALLOWED_IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": 
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MIN_HERO_SIZE = (600, 315)
 MIN_LOGO_SIZE = (256, 256)
+US_MAX_DISCOVERY_DISTANCE_MILES = 5000
 
 
 def get_owned_shop(user: User, db: Session) -> BarberShop:
@@ -89,6 +91,18 @@ def get_owned_shop(user: User, db: Session) -> BarberShop:
 def shop_is_publishable(shop: BarberShop) -> bool:
     return shop.setup_payment_status in {"paid", "demo"} or (
         not stripe_is_configured() and shop.setup_payment_status == "stripe_not_configured"
+    )
+
+
+def normalize_us_phone_number(phone: str) -> str:
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+    raise HTTPException(
+        status_code=400,
+        detail="FadeTap is currently available only in the United States. Enter a valid U.S. phone number or opt out of SMS updates.",
     )
 
 
@@ -1264,7 +1278,7 @@ def create_barber_connect_link(
 def discover_shops(
     lat: float | None = None,
     lng: float | None = None,
-    max_distance_miles: int = Query(default=25, ge=1, le=500),
+    max_distance_miles: int = Query(default=25, ge=1, le=US_MAX_DISCOVERY_DISTANCE_MILES),
     shop_slug: str | None = Query(default=None, max_length=80),
     city: str | None = Query(default=None, max_length=80),
     state: str | None = Query(default=None, max_length=40),
@@ -1475,6 +1489,7 @@ def create_booking_checkout(
         raise HTTPException(status_code=400, detail="Provide a phone number or choose not to receive text updates")
     if not payload.sms_opt_in and not payload.client_name:
         raise HTTPException(status_code=400, detail="Provide your name when you choose not to share a phone number")
+    client_phone = normalize_us_phone_number(payload.client_phone) if payload.sms_opt_in and payload.client_phone else None
 
     service = db.scalar(
         select(Service).where(
@@ -1548,7 +1563,7 @@ def create_booking_checkout(
         service_id=service.id,
         barber_id=barber.id if barber else None,
         payout_stripe_account_id=payout_account_id,
-        client_phone=payload.client_phone or "Not shared",
+        client_phone=client_phone or "Not shared",
         client_name=payload.client_name,
         sms_opt_in=payload.sms_opt_in,
         starts_at=payload.starts_at,
