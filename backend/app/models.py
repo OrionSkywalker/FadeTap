@@ -42,6 +42,10 @@ class BarberShop(Base):
     postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     latitude_microdegrees: Mapped[int | None] = mapped_column(Integer, nullable=True)
     longitude_microdegrees: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    location_country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    location_county: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    location_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    payment_access_override: Mapped[bool] = mapped_column(Boolean, default=False)
     timezone: Mapped[str] = mapped_column(String(80), default="America/Los_Angeles")
     booking_window_days: Mapped[int] = mapped_column(Integer, default=30)
     admin_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -71,6 +75,15 @@ class BarberShop(Base):
         back_populates="shop",
         cascade="all, delete-orphan",
     )
+
+
+class PlatformSettings(Base):
+    __tablename__ = "platform_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    allowed_shop_country_code: Mapped[str] = mapped_column(String(2), default="US")
+    allowed_shop_state: Mapped[str | None] = mapped_column(String(2), default="CA", nullable=True)
+    allowed_shop_county: Mapped[str | None] = mapped_column(String(120), default="Kern County", nullable=True)
 
 
 class BarberProfile(Base):

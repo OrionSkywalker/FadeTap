@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..geography import GeographyLookupError, lookup_us_geography
 from ..models import (
     Appointment,
     BarberBlockout,
@@ -20,6 +21,7 @@ from ..models import (
     BarberShop,
     BusinessHour,
     CheckoutAttempt,
+    PlatformSettings,
     Service,
     ShopDateHourOverride,
     User,
@@ -88,10 +90,28 @@ def get_owned_shop(user: User, db: Session) -> BarberShop:
     return shop
 
 
-def shop_is_publishable(shop: BarberShop) -> bool:
-    return shop.setup_payment_status in {"paid", "demo"} or (
+def get_platform_settings(db: Session) -> PlatformSettings:
+    settings = db.get(PlatformSettings, 1)
+    if settings is None:
+        settings = PlatformSettings(id=1)
+        db.add(settings)
+        db.flush()
+    return settings
+
+
+def shop_is_publishable(shop: BarberShop, settings: PlatformSettings) -> bool:
+    payment_access_ready = shop.payment_access_override or shop.setup_payment_status in {"paid", "demo"} or (
         not stripe_is_configured() and shop.setup_payment_status == "stripe_not_configured"
     )
+    if not payment_access_ready or not shop.location_verified:
+        return False
+    if shop.location_country_code != settings.allowed_shop_country_code:
+        return False
+    if settings.allowed_shop_state and shop.state != settings.allowed_shop_state:
+        return False
+    if settings.allowed_shop_county and shop.location_county != settings.allowed_shop_county:
+        return False
+    return True
 
 
 def normalize_us_phone_number(phone: str) -> str:
@@ -250,6 +270,11 @@ def refresh_recent_processing_fees(shop_id: int, db: Session) -> None:
 
 
 def sync_shop_access(shop: BarberShop, db: Session) -> None:
+    if shop.payment_access_override:
+        if shop.access_warning_month is not None or shop.access_suspended:
+            shop.access_warning_month, shop.access_suspended = None, False
+            db.commit()
+        return
     current_month = month_start().strftime("%Y-%m")
     current_fees = platform_fees_for_month(shop.id, month_start(), db)
     previous_month_start = month_start(1)
@@ -806,15 +831,27 @@ def update_shop_profile(
     db: Session = Depends(get_db),
 ):
     shop = get_owned_shop(user, db)
+    if (payload.latitude is None) != (payload.longitude is None):
+        raise HTTPException(status_code=400, detail="Provide both latitude and longitude to verify your shop location")
+    verified_state = None
+    verified_county = None
+    if payload.latitude is not None and payload.longitude is not None:
+        try:
+            verified_state, verified_county = lookup_us_geography(payload.latitude, payload.longitude)
+        except GeographyLookupError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     shop.name = payload.shop_name
     shop.timezone = payload.timezone
     shop.booking_window_days = max(30, payload.booking_window_days)
     shop.address_line1 = payload.address_line1
     shop.city = payload.city
-    shop.state = payload.state
+    shop.state = verified_state or payload.state
     shop.postal_code = payload.postal_code
     shop.latitude_microdegrees = to_microdegrees(payload.latitude)
     shop.longitude_microdegrees = to_microdegrees(payload.longitude)
+    shop.location_country_code = "US" if verified_state else None
+    shop.location_county = verified_county
+    shop.location_verified = verified_state is not None
     owner_barber = db.scalar(
         select(BarberProfile).where(
             BarberProfile.shop_id == shop.id,
@@ -1285,6 +1322,7 @@ def discover_shops(
     service: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ):
+    settings = get_platform_settings(db)
     shops_query = select(BarberShop)
     if shop_slug:
         shops_query = shops_query.where(BarberShop.slug == shop_slug.strip())
@@ -1298,7 +1336,7 @@ def discover_shops(
     for shop in shops:
         if is_platform_admin(shop.owner):
             continue
-        if not shop_is_publishable(shop):
+        if not shop_is_publishable(shop, settings):
             continue
         services_query = select(Service).where(Service.shop_id == shop.id, Service.is_active.is_(True))
         if service:
@@ -1357,10 +1395,11 @@ def discover_shops(
 
 @router.get("/discovery-filters", response_model=ShopDiscoveryFilters)
 def discovery_filters(db: Session = Depends(get_db)):
+    settings = get_platform_settings(db)
     shops = [
         shop
         for shop in db.scalars(select(BarberShop).order_by(BarberShop.name.asc())).all()
-        if not is_platform_admin(shop.owner) and shop_is_publishable(shop)
+        if not is_platform_admin(shop.owner) and shop_is_publishable(shop, settings)
     ]
     shop_ids = [shop.id for shop in shops]
     service_rows = (
@@ -1394,10 +1433,11 @@ def discovery_filters(db: Session = Depends(get_db)):
 
 @router.get("/{shop_slug}", response_model=ShopPublicResponse)
 def get_public_shop(shop_slug: str, db: Session = Depends(get_db)):
+    settings = get_platform_settings(db)
     shop = db.scalar(select(BarberShop).where(BarberShop.slug == shop_slug))
     if shop is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found")
-    if not shop_is_publishable(shop):
+    if not shop_is_publishable(shop, settings):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop is not published yet")
 
     all_services = list(db.scalars(
@@ -1429,10 +1469,11 @@ def get_shop_slots(
     barber_id: int | None = None,
     db: Session = Depends(get_db),
 ):
+    settings = get_platform_settings(db)
     shop = db.scalar(select(BarberShop).where(BarberShop.slug == shop_slug))
     if shop is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found")
-    if not shop_is_publishable(shop):
+    if not shop_is_publishable(shop, settings):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop is not published yet")
 
     all_services = list(db.scalars(
@@ -1477,10 +1518,11 @@ def create_booking_checkout(
     payload: AppointmentCreate,
     db: Session = Depends(get_db),
 ):
+    settings = get_platform_settings(db)
     shop = db.scalar(select(BarberShop).where(BarberShop.slug == shop_slug))
     if shop is None:
         raise HTTPException(status_code=404, detail="Shop not found")
-    if not shop_is_publishable(shop):
+    if not shop_is_publishable(shop, settings):
         raise HTTPException(status_code=404, detail="Shop is not published yet")
     sync_shop_access(shop, db)
     if shop.access_suspended:

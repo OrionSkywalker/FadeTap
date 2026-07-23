@@ -537,6 +537,11 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <details className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
           <summary className="cursor-pointer text-xl font-semibold">Shop profile</summary>
+          <p className={`mt-3 text-sm ${dashboard.shop.location_verified ? "text-emerald-700" : "text-amber-700"}`}>
+            {dashboard.shop.location_verified
+              ? `Verified U.S. location: ${dashboard.shop.location_county}, ${dashboard.shop.state}.`
+              : "Your shop will not appear in public search until its U.S. location is verified. Enter coordinates or use your current location below."}
+          </p>
           <form onSubmit={saveProfile}>
           <div className="mt-4 grid gap-3">
             <label className="grid gap-1 text-sm font-medium">

@@ -14,6 +14,18 @@ def run_startup_migrations() -> None:
             connection.execute(text(
                 "ALTER TABLE checkout_attempts ADD COLUMN IF NOT EXISTS stripe_processing_fee_cents INTEGER DEFAULT 0"
             ))
+            connection.execute(text(
+                "ALTER TABLE barber_shops ADD COLUMN IF NOT EXISTS location_country_code VARCHAR(2)"
+            ))
+            connection.execute(text(
+                "ALTER TABLE barber_shops ADD COLUMN IF NOT EXISTS location_county VARCHAR(120)"
+            ))
+            connection.execute(text(
+                "ALTER TABLE barber_shops ADD COLUMN IF NOT EXISTS location_verified BOOLEAN DEFAULT FALSE"
+            ))
+            connection.execute(text(
+                "ALTER TABLE barber_shops ADD COLUMN IF NOT EXISTS payment_access_override BOOLEAN DEFAULT FALSE"
+            ))
         return
 
     with engine.begin() as connection:
@@ -114,6 +126,10 @@ def run_startup_migrations() -> None:
             "postal_code": "VARCHAR(20)",
             "latitude_microdegrees": "INTEGER",
             "longitude_microdegrees": "INTEGER",
+            "location_country_code": "VARCHAR(2)",
+            "location_county": "VARCHAR(120)",
+            "location_verified": "BOOLEAN DEFAULT 0",
+            "payment_access_override": "BOOLEAN DEFAULT 0",
         }
         for column_name, column_type in nullable_shop_columns.items():
             if column_name not in shop_columns:

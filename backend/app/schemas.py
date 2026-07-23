@@ -107,6 +107,10 @@ class BarberShopRead(BaseModel):
     postal_code: str | None = None
     latitude_microdegrees: int | None = None
     longitude_microdegrees: int | None = None
+    location_country_code: str | None = None
+    location_county: str | None = None
+    location_verified: bool = False
+    payment_access_override: bool = False
     timezone: str
     booking_window_days: int
     admin_message: str | None = None
