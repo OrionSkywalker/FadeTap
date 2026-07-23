@@ -171,7 +171,7 @@ export default function LandingPage() {
         <img
           src={astronautArtwork}
           alt="FadeTap astronaut artwork"
-          className="mx-auto block w-full max-w-[1600px] object-cover"
+          className="block w-full opacity-60"
         />
       </div>
     </>
