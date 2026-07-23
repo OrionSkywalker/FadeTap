@@ -167,8 +167,8 @@ export default function ShopBookingPage() {
       {status === "ready" && availability && (
         <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
           <div className="flex flex-col gap-6">
-            <div className="order-last rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-              <h2 className="text-xl font-semibold">Business hours</h2>
+            <details className="order-last rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+              <summary className="cursor-pointer text-xl font-semibold">Business hours</summary>
               {selectedDateHour && (
                 <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                   Selected date: {selectedDateHour.is_closed ? "Closed" : `${selectedDateHour.opens_at} - ${selectedDateHour.closes_at}`}
@@ -183,7 +183,7 @@ export default function ShopBookingPage() {
                   </p>
                 ))}
               </div>
-            </div>
+            </details>
 
             <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold">Service</h2>
