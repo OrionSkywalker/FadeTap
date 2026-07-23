@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../api";
 import InstallAppButton from "../components/InstallAppButton";
+import astronautArtwork from "../assets/fadetap-astronauts.png";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -68,7 +69,8 @@ export default function LandingPage() {
   }
 
   return (
-    <section className="mx-auto max-w-6xl px-6 py-12">
+    <>
+      <section className="mx-auto max-w-6xl px-6 py-12">
       <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-start">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
@@ -164,6 +166,14 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
-    </section>
+      </section>
+      <div className="mt-4 overflow-hidden border-t border-zinc-800 bg-black">
+        <img
+          src={astronautArtwork}
+          alt="FadeTap astronaut artwork"
+          className="mx-auto block w-full max-w-[1600px] object-cover"
+        />
+      </div>
+    </>
   );
 }

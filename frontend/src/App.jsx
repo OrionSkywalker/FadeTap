@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { API_BASE_URL, apiRequest } from "./api";
+import fadetapDarkLogo from "./assets/fadetap-logo-dark.png";
+import fadetapLightLogo from "./assets/fadetap-logo-light.png";
 
 export default function App() {
   const location = useLocation();
@@ -71,8 +73,12 @@ export default function App() {
     <div className="min-h-screen bg-stone-50 text-zinc-950 transition-colors dark:bg-zinc-950 dark:text-zinc-50">
       <header className="border-b border-zinc-200 bg-white transition-colors dark:border-zinc-800 dark:bg-zinc-950">
         <nav className="relative mx-auto flex min-h-20 max-w-6xl items-center justify-between px-4 py-3 sm:min-h-24 sm:px-6">
-          <Link to="/" className="text-5xl font-semibold leading-none tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-6xl">
-            FadeTap
+          <Link to="/" aria-label="FadeTap home" className="block">
+            <img
+              src={theme === "dark" ? fadetapDarkLogo : fadetapLightLogo}
+              alt="FadeTap"
+              className="h-14 w-auto sm:h-16"
+            />
           </Link>
           {!isShopBookingPage && (
             <div className="absolute right-4 top-1/2 -translate-y-1/2 sm:right-6">
