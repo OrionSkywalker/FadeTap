@@ -12,14 +12,16 @@ def seed_demo_shop() -> None:
     try:
         demo = db.scalar(select(BarberShop).where(BarberShop.slug == "demo-cuts"))
         if demo is not None:
-            if demo.city is None:
-                demo.address_line1 = "100 Main Street"
-                demo.city = "Los Angeles"
-                demo.state = "CA"
-                demo.postal_code = "90012"
-                demo.latitude_microdegrees = 34052235
-                demo.longitude_microdegrees = -118243683
-                db.commit()
+            demo.address_line1 = "100 Main Street"
+            demo.city = "Bakersfield"
+            demo.state = "CA"
+            demo.postal_code = "93301"
+            demo.latitude_microdegrees = 35373292
+            demo.longitude_microdegrees = -119018713
+            demo.location_country_code = "US"
+            demo.location_county = "Kern County"
+            demo.location_verified = True
+            db.commit()
             return
 
         user = User(
@@ -38,11 +40,14 @@ def seed_demo_shop() -> None:
             timezone="America/Los_Angeles",
             setup_payment_status="demo",
             address_line1="100 Main Street",
-            city="Los Angeles",
+            city="Bakersfield",
             state="CA",
-            postal_code="90012",
-            latitude_microdegrees=34052235,
-            longitude_microdegrees=-118243683,
+            postal_code="93301",
+            latitude_microdegrees=35373292,
+            longitude_microdegrees=-119018713,
+            location_country_code="US",
+            location_county="Kern County",
+            location_verified=True,
         )
         db.add(shop)
         db.flush()
