@@ -8,12 +8,14 @@ import fadetapLightLogo from "../assets/fadetap-logo-light.png";
 export default function LandingPage() {
   const navigate = useNavigate();
   const [shops, setShops] = useState([]);
+  const [discoveryFilters, setDiscoveryFilters] = useState({ shops: [], cities: [], states: [], services: [] });
+  const [selectedFilters, setSelectedFilters] = useState({ shop_slug: "", city: "", state: "", service: "" });
   const [searchCoords, setSearchCoords] = useState(null);
   const [searchRadius, setSearchRadius] = useState(25);
   const [locationStatus, setLocationStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function loadShops(coords = searchCoords, radius = searchRadius) {
+  async function loadShops(coords = searchCoords, radius = searchRadius, filters = selectedFilters) {
     setLoading(true);
     const query = new URLSearchParams();
     if (coords) {
@@ -21,15 +23,24 @@ export default function LandingPage() {
       query.set("lng", coords.longitude);
       query.set("max_distance_miles", radius);
     }
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) query.set(key, value);
+    });
     const queryString = query.toString() ? `?${query.toString()}` : "";
-    const response = await fetch(`${API_BASE_URL}/api/shops${queryString}`);
-    const data = await response.json();
-    setShops(data);
-    setLoading(false);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/shops${queryString}`);
+      setShops(response.ok ? await response.json() : []);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     useMyLocation({ silentFallback: true });
+    fetch(`${API_BASE_URL}/api/shops/discovery-filters`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => data && setDiscoveryFilters(data))
+      .catch(() => setDiscoveryFilters({ shops: [], cities: [], states: [], services: [] }));
   }, []);
 
   useEffect(() => {
@@ -69,6 +80,20 @@ export default function LandingPage() {
     navigate("/book/demo-cuts");
   }
 
+  function updateFilter(name, value) {
+    setSelectedFilters((current) => ({ ...current, [name]: value }));
+  }
+
+  function searchProviders() {
+    loadShops(searchCoords, searchRadius, selectedFilters);
+  }
+
+  function clearFilters() {
+    const emptyFilters = { shop_slug: "", city: "", state: "", service: "" };
+    setSelectedFilters(emptyFilters);
+    loadShops(searchCoords, searchRadius, emptyFilters);
+  }
+
   return (
     <>
       <section className="mx-auto max-w-6xl px-6 py-12">
@@ -104,6 +129,44 @@ export default function LandingPage() {
             <button type="button" onClick={bookNow} className="text-sm font-semibold text-emerald-800">
               Book now
             </button>
+          </div>
+
+          <div className="mt-4 rounded-md border border-zinc-200 bg-stone-50 p-3">
+            <p className="text-sm font-semibold text-zinc-800">Find a provider</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-xs font-semibold text-zinc-700">
+                Shop
+                <select value={selectedFilters.shop_slug} onChange={(event) => updateFilter("shop_slug", event.target.value)} className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900">
+                  <option value="">Any shop</option>
+                  {discoveryFilters.shops.map((shop) => <option key={shop.slug} value={shop.slug}>{shop.label}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-zinc-700">
+                Service
+                <select value={selectedFilters.service} onChange={(event) => updateFilter("service", event.target.value)} className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900">
+                  <option value="">Any service</option>
+                  {discoveryFilters.services.map((service) => <option key={service} value={service}>{service}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-zinc-700">
+                City
+                <select value={selectedFilters.city} onChange={(event) => updateFilter("city", event.target.value)} className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900">
+                  <option value="">Any city</option>
+                  {discoveryFilters.cities.map((city) => <option key={city} value={city}>{city}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-zinc-700">
+                State
+                <select value={selectedFilters.state} onChange={(event) => updateFilter("state", event.target.value)} className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900">
+                  <option value="">Any state</option>
+                  {discoveryFilters.states.map((state) => <option key={state} value={state}>{state}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={searchProviders} className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-800">Search providers</button>
+              <button type="button" onClick={clearFilters} className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-stone-100">Clear</button>
+            </div>
           </div>
 
           <div className="mt-4 rounded-md border border-zinc-200 bg-stone-50 p-3">
@@ -147,8 +210,11 @@ export default function LandingPage() {
                     <p className="text-sm text-zinc-600">
                       {[shop.city, shop.state].filter(Boolean).join(", ") || "Location not listed"}
                     </p>
-                    {shop.next_service_name && (
-                      <p className="mt-1 text-sm text-zinc-500">Services include {shop.next_service_name}</p>
+                    {shop.service_names?.length > 0 && (
+                      <p className="mt-1 text-sm text-zinc-500">Services: {shop.service_names.join(", ")}</p>
+                    )}
+                    {shop.provider_names?.length > 0 && (
+                      <p className="mt-1 text-sm text-zinc-500">Providers: {shop.provider_names.join(", ")}</p>
                     )}
                   </div>
                   {shop.distance_miles !== null && (

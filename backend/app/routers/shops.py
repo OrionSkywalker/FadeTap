@@ -55,6 +55,8 @@ from ..schemas import (
     ServiceCreate,
     ServiceRead,
     ServiceUpdate,
+    ShopDiscoveryFilters,
+    ShopDiscoveryOption,
     ShopDiscoveryRead,
     ShopProfileUpdate,
     ShopPublicResponse,
@@ -1263,23 +1265,49 @@ def discover_shops(
     lat: float | None = None,
     lng: float | None = None,
     max_distance_miles: int = Query(default=25, ge=1, le=500),
+    shop_slug: str | None = Query(default=None, max_length=80),
+    city: str | None = Query(default=None, max_length=80),
+    state: str | None = Query(default=None, max_length=40),
+    service: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ):
-    shops = db.scalars(select(BarberShop).order_by(BarberShop.name.asc())).all()
+    shops_query = select(BarberShop)
+    if shop_slug:
+        shops_query = shops_query.where(BarberShop.slug == shop_slug.strip())
+    if city:
+        shops_query = shops_query.where(func.lower(BarberShop.city) == city.strip().lower())
+    if state:
+        shops_query = shops_query.where(func.lower(BarberShop.state) == state.strip().lower())
+
+    shops = db.scalars(shops_query.order_by(BarberShop.name.asc())).all()
     rows: list[ShopDiscoveryRead] = []
     for shop in shops:
         if is_platform_admin(shop.owner):
             continue
         if not shop_is_publishable(shop):
             continue
-        service_name = db.scalar(
-            select(Service.name)
-            .where(Service.shop_id == shop.id, Service.is_active.is_(True))
-            .order_by(Service.name.asc())
-            .limit(1)
-        )
-        if service_name is None:
+        services_query = select(Service).where(Service.shop_id == shop.id, Service.is_active.is_(True))
+        if service:
+            services_query = services_query.where(func.lower(Service.name) == service.strip().lower())
+        shop_services = db.scalars(services_query.order_by(Service.name.asc())).all()
+        if not shop_services:
             continue
+        service_names = list(dict.fromkeys(item.name for item in shop_services))
+        service_barber_ids = {item.barber_id for item in shop_services if item.barber_id is not None}
+        provider_names = list(
+            dict.fromkeys(
+                barber.display_name
+                for barber in db.scalars(
+                    select(BarberProfile)
+                    .where(
+                        BarberProfile.shop_id == shop.id,
+                        BarberProfile.is_active.is_(True),
+                        BarberProfile.id.in_(service_barber_ids),
+                    )
+                    .order_by(BarberProfile.is_owner.desc(), BarberProfile.display_name.asc())
+                )
+            )
+        )
         shop_distance = distance_miles(
             lat,
             lng,
@@ -1297,7 +1325,9 @@ def discover_shops(
                 state=shop.state,
                 address_line1=shop.address_line1,
                 distance_miles=shop_distance,
-                next_service_name=service_name,
+                next_service_name=service_names[0],
+                service_names=service_names,
+                provider_names=provider_names,
             )
         )
 
@@ -1309,6 +1339,43 @@ def discover_shops(
             row.name.lower(),
         ),
     )[:20]
+
+
+@router.get("/discovery-filters", response_model=ShopDiscoveryFilters)
+def discovery_filters(db: Session = Depends(get_db)):
+    shops = [
+        shop
+        for shop in db.scalars(select(BarberShop).order_by(BarberShop.name.asc())).all()
+        if not is_platform_admin(shop.owner) and shop_is_publishable(shop)
+    ]
+    shop_ids = [shop.id for shop in shops]
+    service_rows = (
+        db.scalars(
+            select(Service)
+            .where(Service.shop_id.in_(shop_ids), Service.is_active.is_(True))
+            .order_by(Service.name.asc())
+        ).all()
+        if shop_ids
+        else []
+    )
+    active_shop_ids = {item.shop_id for item in service_rows}
+    visible_shops = [shop for shop in shops if shop.id in active_shop_ids]
+
+    def unique_values(values: list[str | None]) -> list[str]:
+        return sorted({value.strip() for value in values if value and value.strip()}, key=str.lower)
+
+    return ShopDiscoveryFilters(
+        shops=[
+            ShopDiscoveryOption(
+                slug=shop.slug,
+                label=" · ".join(part for part in [shop.name, shop.city, shop.state] if part),
+            )
+            for shop in visible_shops
+        ],
+        cities=unique_values([shop.city for shop in visible_shops]),
+        states=unique_values([shop.state for shop in visible_shops]),
+        services=unique_values([item.name for item in service_rows]),
+    )
 
 
 @router.get("/{shop_slug}", response_model=ShopPublicResponse)

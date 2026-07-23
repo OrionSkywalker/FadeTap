@@ -288,6 +288,20 @@ class ShopDiscoveryRead(BaseModel):
     address_line1: str | None = None
     distance_miles: float | None = None
     next_service_name: str | None = None
+    service_names: list[str] = []
+    provider_names: list[str] = []
+
+
+class ShopDiscoveryOption(BaseModel):
+    slug: str
+    label: str
+
+
+class ShopDiscoveryFilters(BaseModel):
+    shops: list[ShopDiscoveryOption]
+    cities: list[str]
+    states: list[str]
+    services: list[str]
 
 
 class ShopSlotsResponse(BaseModel):
